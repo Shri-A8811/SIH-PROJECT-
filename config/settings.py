@@ -31,7 +31,14 @@ class ModelTags(BaseModel):
 
 class Settings(BaseModel):
     app_name: str = "Sovereign On-Premise Agentic AI Workbench (MRPL)"
-    database_url: str = f"sqlite:///{BASE_DIR / 'workbench_state.db'}"
+    base_dir: Path = BASE_DIR
+    BASE_DIR: Path = BASE_DIR
+    # Database configuration: Default to local SQLite for instant zero-dependency start, or PostgreSQL if DATABASE_URL is set
+    database_url: str = os.getenv(
+        "DATABASE_URL",
+        f"sqlite:///{BASE_DIR / 'workbench_state.db'}"
+    )
+    vector_dimension: int = 384
     ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     
     # Model configuration
