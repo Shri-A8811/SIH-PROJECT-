@@ -1,0 +1,21 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Database files
+workbench_state.db
+workbench_state.db-journal
+*.sqlite3
+
+# Uploads & Runtime Artifacts
+.files/
+outputs/*.docx
+
+# Environment
+.env
+.venv/
+env/
+venv/
