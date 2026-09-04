@@ -92,14 +92,47 @@ class ArtifactVerifier:
                 errors.append(f"Mandatory requirement missing: document lacks '{phrase}'.")
                 checks.append({"check": f"contains_{check_name}", "passed": False})
 
-        # 4. Check Numeric Claim Matching
+        # 4. Check Numeric Claim Matching with floating-point tolerance
         if expected_numeric_values:
+            import re
+            extracted_numbers = []
+            for token in re.findall(r"[-+]?(?:\d*\.\d+|\d+)", combined_text):
+                try:
+                    extracted_numbers.append(float(token))
+                except ValueError:
+                    pass
+
             for num_val in expected_numeric_values:
+                matched = False
                 if str(num_val) in combined_text:
+                    matched = True
+                else:
+                    try:
+                        target_float = float(num_val)
+                        for val in extracted_numbers:
+                            if abs(val - target_float) <= 0.01:
+                                matched = True
+                                break
+                    except (ValueError, TypeError):
+                        pass
+
+                if matched:
                     checks.append({"check": f"numeric_match_{num_val}", "passed": True})
                 else:
                     errors.append(f"Numeric claim cross-check failed: value '{num_val}' not found in document text.")
                     checks.append({"check": f"numeric_match_{num_val}", "passed": False})
+
+        # 5. Check Table Structural Integrity
+        for i, table in enumerate(doc.tables):
+            row_count = len(table.rows)
+            col_count = len(table.columns) if row_count > 0 else 0
+            has_content = any(c.text.strip() for row in table.rows for c in row.cells)
+            checks.append({
+                "check": f"table_{i+1}_integrity",
+                "passed": row_count > 0 and col_count > 0 and has_content,
+                "rows": row_count,
+                "cols": col_count,
+            })
 
         is_passed = len(errors) == 0
         notes = "All inline verification checks passed successfully." if is_passed else "; ".join(errors)

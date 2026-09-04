@@ -5,6 +5,7 @@ Zero cloud dependencies, air-gap strict, single-GPU lifecycle aware.
 from pathlib import Path
 from pydantic import BaseModel, Field
 import os
+from urllib.parse import urlparse
 
 # Base paths
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -39,13 +40,14 @@ class Settings(BaseModel):
         f"sqlite:///{BASE_DIR / 'workbench_state.db'}"
     )
     vector_dimension: int = 384
-    ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
     
     # Model configuration
     models: ModelTags = ModelTags()
     
-    # Fallback to high-fidelity deterministic engine if Ollama is not active or during tests
-    enable_deterministic_mock_fallback: bool = True
+    # Never manufacture industrial findings when a model is unavailable. Test-only
+    # fixtures may opt in explicitly through WORKBENCH_TEST_MODE.
+    enable_deterministic_mock_fallback: bool = os.getenv("WORKBENCH_TEST_MODE", "").lower() in {"1", "true", "yes"}
     
     # Retrieval thresholds
     reranker_min_relevance_score: float = 0.35
@@ -65,3 +67,13 @@ class Settings(BaseModel):
     air_gap_enforced: bool = True
 
 settings = Settings()
+
+
+def validate_local_ollama_endpoint(endpoint: str) -> str:
+    """Reject non-loopback model endpoints before any confidential prompt is sent."""
+    parsed = urlparse(endpoint)
+    if parsed.scheme not in {"http", "https"} or parsed.hostname not in {"127.0.0.1", "::1", "localhost"}:
+        raise ValueError(
+            "OLLAMA_BASE_URL must point to a loopback-only local service; remote model endpoints are forbidden."
+        )
+    return endpoint.rstrip("/")

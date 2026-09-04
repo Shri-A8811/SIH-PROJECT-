@@ -62,7 +62,7 @@ class DocxApprovalNoteGenerator:
         p_disc2 = cell.add_paragraph()
         p_disc2.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run_sub = p_disc2.add_run(
-            "This technical approval note was synthesized by the Sovereign On-Premise Agentic AI Workbench (MRPL). "
+            "This technical approval note was synthesized by the Sovereign On-Premise Agentic AI Workbench. "
             "All quantitative findings are grounded in verified inspection evidence and SOP citations. "
             "Final engineering authorization requires physical signature below."
         )
@@ -75,7 +75,7 @@ class DocxApprovalNoteGenerator:
         # 2. DOCUMENT HEADER
         header_p = doc.add_paragraph()
         header_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run_org = header_p.add_run("MANGALORE REFINERY AND PETROCHEMICALS LIMITED (MRPL)\n")
+        run_org = header_p.add_run("SOVEREIGN INDUSTRIAL AI WORKBENCH\n")
         run_org.bold = True
         run_org.font.size = Pt(14)
         run_org.font.color.rgb = RGBColor(15, 45, 90)
@@ -92,7 +92,7 @@ class DocxApprovalNoteGenerator:
         meta_table.cell(0, 0).paragraphs[0].add_run(f"Project ID: {project_id}").bold = True
         meta_table.cell(0, 1).paragraphs[0].add_run(f"Date: {now_dt.strftime('%d-%b-%Y')}").bold = True
         meta_table.cell(1, 0).paragraphs[0].add_run("Classification: Internal Confidential (Air-Gapped)").font.size = Pt(9)
-        meta_table.cell(1, 1).paragraphs[0].add_run("Ref Standard: MRPL-SOP-17 / SOP-04").font.size = Pt(9)
+        meta_table.cell(1, 1).paragraphs[0].add_run("Ref Standard: SOP-17 / SOP-04").font.size = Pt(9)
 
         doc.add_paragraph()
 
@@ -172,7 +172,7 @@ class DocxApprovalNoteGenerator:
         sign_table.cell(1, 1).paragraphs[0].add_run("Required Action: Emergency Spool Replacement Before Commissioning").bold = True
 
         # Save document
-        fname = output_filename or f"MRPL_Approval_Note_{project_id}_{now_dt.strftime('%Y%m%d_%H%M%S')}.docx"
+        fname = output_filename or f"Approval_Note_{project_id}_{now_dt.strftime('%Y%m%d_%H%M%S')}.docx"
         file_path = OUTPUT_DIR / fname
         doc.save(str(file_path))
 

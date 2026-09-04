@@ -378,14 +378,27 @@ Click the file below to download the official validated Technical Approval Note:
         await cl.Message(content=resp_md).send()
 
     # ----------------------------------------------------------------------------------------------
-    # BRANCH C: CODING / SANDBOX EXECUTION
+    # BRANCH C: CODING / SANDBOX EXECUTION & CODE GENERATION
     # ----------------------------------------------------------------------------------------------
     elif route_type == "coding":
-        async with cl.Step(name="Hardened Code Sandbox", type="tool") as sb_step:
-            sb_res = orchestrator.sandbox.execute_python_code(user_prompt)
-            sb_step.output = f"Executed in {sb_res.duration_ms:.1f}ms with exit code {sb_res.exit_code}."
+        trimmed = user_prompt.strip()
+        first_line = trimmed.split("\n")[0].strip().lower()
+        is_explicit_gen = any(kw in first_line for kw in [
+            "give me", "write", "create", "implement", "code for", "how to", "show me", "algorithm for", "b tree", "btree", "binary tree", "operations"
+        ])
+        is_actual_code = False
+        if not is_explicit_gen:
+            if any(first_line.startswith(prefix) for prefix in ("def ", "import ", "from ", "print(", "class ", "for ", "while ", "with ", "x =", "a =", "b =")):
+                is_actual_code = True
+            elif len(trimmed.split("\n")) > 1 and not any(kw in trimmed.lower() for kw in ("give me", "write", "create", "implement", "explain", "how to")):
+                is_actual_code = True
 
-        resp_md = f"""
+        if is_actual_code:
+            async with cl.Step(name="Hardened Code Sandbox", type="tool") as sb_step:
+                sb_res = orchestrator.sandbox.execute_python_code(user_prompt)
+                sb_step.output = f"Executed in {sb_res.duration_ms:.1f}ms with exit code {sb_res.exit_code}."
+
+            resp_md = f"""
 ### 💻 Isolated Sandbox Execution Result
 
 **Backend:** `{sb_res.sandbox_backend}` • **Exit Code:** `{sb_res.exit_code}` • **Duration:** `{sb_res.duration_ms:.1f}ms`
@@ -394,12 +407,36 @@ Click the file below to download the official validated Technical Approval Note:
 {sb_res.stdout or sb_res.stderr or "Executed with no output."}
 ```
 """
+            await cl.Message(content=resp_md).send()
+        else:
+            async with cl.Step(name=f"Coding Specialist ({settings.models.coding})", type="llm") as coder_step:
+                coder_step.output = f"Generating production Python code for: '{user_prompt.strip()}'"
+
+            coding_prompt = (
+                "You are a Principal Software Engineer specialized in clean, efficient data structures and algorithms.\n"
+                f"User Request: {user_prompt}\n\n"
+                "Requirements:\n"
+                "1. Provide a complete, production-grade Python implementation with docstrings and type hints.\n"
+                "2. Include all necessary helper methods and comprehensive comments.\n"
+                "3. Include a runnable demonstration block in if __name__ == '__main__': showing usage and sample output.\n"
+                "4. Format your response cleanly in a ```python ... ``` block."
+            )
+            msg = cl.Message(content="")
+            await msg.send()
+            stream_gen = orchestrator.model_client.generate_text_stream(
+                model_name=settings.models.coding,
+                prompt=coding_prompt,
+                max_tokens=2500,
+                project_id=project_id,
+            )
+            for chunk in stream_gen:
+                await msg.stream_token(chunk)
+            await msg.update()
+
         # Post-flight network monitor check
         async with cl.Step(name="Network Monitor (Post-flight Air-Gap Check)", type="tool") as net_step_post:
             post_snap = network_monitor.inspect_current_egress()
             net_step_post.output = f"Outbound external connections: {post_snap.external_connections} (Air-Gapped Verified)"
-
-        await cl.Message(content=resp_md).send()
 
     # ----------------------------------------------------------------------------------------------
     # BRANCH D: GREETING / CONVERSATIONAL ASSISTANT
@@ -436,54 +473,81 @@ I am your 100% air-gapped refinery operations and turnaround inspection assistan
         await cl.Message(content=resp_md).send()
 
     # ----------------------------------------------------------------------------------------------
-    # BRANCH E: GENERAL REASONING & KNOWLEDGE RETRIEVAL (SOP RAG)
+    # BRANCH E: AUTONOMOUS REASONING & AGENTIC WORKFLOW (WITH PDF / DOCX DELIVERABLE GENERATION)
     # ----------------------------------------------------------------------------------------------
     else:
-        async with cl.Step(name="Hybrid Knowledge Retrieval (SOP RAG)", type="tool") as rag_step:
-            rag_res = orchestrator.retriever.search(user_prompt, project_id=project_id, top_k=3)
-            grounding_status = rag_res.get("grounding_status", "matched")
-            results = rag_res.get("results", [])
-            rag_step.output = f"Search Status: {grounding_status}. Retrieved {len(results)} relevant chunks."
+        # Check if query is scoped to a specific folder e.g. [folder: SOPs]
+        target_category = None
+        for cat in store.get_categories():
+            if f"folder: {cat.lower()}" in user_prompt.lower() or f"folder:{cat.lower()}" in user_prompt.lower() or f"category: {cat.lower()}" in user_prompt.lower():
+                target_category = cat
+                break
 
-        if results and grounding_status == "matched":
-            async with cl.Step(name="Reasoning Specialist (Single-GPU Inference)", type="llm") as llm_step:
-                context_chunks = [f"Doc: {r['document_name']} (Page {r['page_number']}) - {r['section_title']}\n{r['content']}" for r in results]
-                joined_context = "\n\n---\n\n".join(context_chunks)
-                
-                llm_res = orchestrator.model_client.generate_text(
-                    model_name="qwen2.5vl:3b",
-                    prompt=f"Context:\n{joined_context}\n\nQuestion: {user_prompt}\nProvide an accurate technical answer based on the context above:",
-                    max_tokens=150,
-                    project_id=project_id,
-                )
-                llm_step.output = f"Generated response using resident model in {llm_res['inference_duration_ms']:.1f}ms."
+        msg = cl.Message(content="")
+        await msg.send()
 
+        final_response = ""
+        citations = []
+        generated_deliverable = None
+        active_steps = {}
+
+        for event in orchestrator.run_autonomous_plan_loop_stream(
+            user_prompt=user_prompt,
+            project_id=project_id,
+            category=target_category,
+            max_steps=5,
+        ):
+            event_type = event.get("type")
+            if event_type == "thought":
+                step_no = event.get("step")
+                thought_content = event.get("content", "")
+                async with cl.Step(name=f"Cognitive Planner (Step {step_no})", type="llm") as thought_step:
+                    thought_step.output = thought_content
+            elif event_type == "tool_call":
+                step_no = event.get("step")
+                t_name = event.get("tool")
+                t_inp = event.get("input", {})
+                t_step = cl.Step(name=f"Tool: {t_name}", type="tool")
+                await t_step.send()
+                t_step.input = json.dumps(t_inp, indent=2)
+                active_steps[step_no] = t_step
+            elif event_type == "tool_result":
+                step_no = event.get("step")
+                t_name = event.get("tool")
+                t_out = event.get("output", {})
+                if step_no in active_steps:
+                    t_step = active_steps.pop(step_no)
+                    out_str = json.dumps(t_out, indent=2) if isinstance(t_out, (dict, list)) else str(t_out)
+                    t_step.output = out_str[:1000] + ("... [truncated]" if len(out_str) > 1000 else "")
+                    await t_step.update()
+            elif event_type == "final_chunk":
+                chunk = event.get("chunk", "")
+                await msg.stream_token(chunk)
+            elif event_type == "completed":
+                final_response = event.get("final_response", "")
+                citations = event.get("citations", [])
+                generated_deliverable = event.get("generated_deliverable")
+
+        # Citations formatting if not already present in message content
+        if citations and "📚 Grounded Sources Cited:" not in msg.content:
+            seen_cits = set()
             citations_md = "\n\n**📚 Grounded Sources Cited:**\n"
-            for r in results:
-                citations_md += f"- **`{r['document_name']}`** — *{r['section_title']}* (Page {r['page_number']}, Evidence: `{r['evidence_id']}`)\n"
+            for r in citations:
+                k = (r.get("document_name"), r.get("page_number"), r.get("section_title"))
+                if k not in seen_cits:
+                    seen_cits.add(k)
+                    citations_md += f"- **`{r.get('document_name')}`** [Folder: *{r.get('category', 'General')}*] — *{r.get('section_title')}* (Page {r.get('page_number', 1)}, Evidence: `{r.get('evidence_id', 'E_RET')}`)\n"
+            await msg.stream_token(citations_md)
 
-            resp_md = llm_res["response"] + citations_md
-        else:
-            # Fallback to local LLM general engineering response with clear disclaimer
-            async with cl.Step(name="General Reasoning Specialist (Non-Standard Query)", type="llm") as llm_step:
-                llm_res = orchestrator.model_client.generate_text(
-                    model_name="qwen2.5vl:3b",
-                    prompt=f"You are the Sovereign AI Assistant for MRPL. Answer this engineering question clearly and concisely:\n{user_prompt}",
-                    max_tokens=150,
-                    project_id=project_id,
-                )
-                llm_step.output = f"Generated response using local model in {llm_res['inference_duration_ms']:.1f}ms."
+        # Attach deliverable file if generated (e.g. .pdf or .docx)
+        elements = []
+        if generated_deliverable and Path(generated_deliverable).exists():
+            elements.append(cl.File(name=Path(generated_deliverable).name, path=str(generated_deliverable), display="inline"))
+            msg.elements = elements
 
-            resp_md = f"""
-{llm_res['response']}
-
----
-*(Note: General engineering knowledge output. No matching internal MRPL SOP standard was cited for this specific query).*
-"""
+        await msg.update()
 
         # Post-flight network monitor check
         async with cl.Step(name="Network Monitor (Post-flight Air-Gap Check)", type="tool") as net_step_post:
             post_snap = network_monitor.inspect_current_egress()
             net_step_post.output = f"Outbound external connections: {post_snap.external_connections} (Air-Gapped Verified)"
-
-        await cl.Message(content=resp_md).send()

@@ -9,7 +9,7 @@ from src.core.orchestrator import AgenticOrchestrator
 from config.settings import KNOWLEDGE_BASE_DIR, SAMPLE_INPUTS_DIR
 
 
-def test_full_hero_inspection_workflow():
+def test_hero_workflow_fails_closed_when_local_inference_is_unavailable():
     store = StateStore("sqlite:///:memory:")
     orchestrator = AgenticOrchestrator(store)
 
@@ -25,28 +25,8 @@ def test_full_hero_inspection_workflow():
         user_prompt="Analyze this turnaround inspection report, retrieve internal SOPs, verify calculations, and generate approval note.",
     )
 
-    # 1. Check Overall Workflow Status
-    assert output["status"] == "workflow_completed"
-    assert output["verification_status"] is True
-    assert Path(output["generated_deliverable"]).exists()
-
-    # 2. Check Tasks Executed in State Store
-    tasks = store.list_tasks_for_project(project_id)
-    task_types = [t.task_type for t in tasks]
-    assert "multimodal_extraction" in task_types
-    assert "retrieval" in task_types
-    assert "calculation" in task_types
-    assert "synthesis" in task_types
-    assert "document_generation" in task_types
-    assert "verification" in task_types
-
-    # 3. Check Evidence Grounding in State Store
-    evidence = store.get_all_evidence_for_project(project_id)
-    assert len(evidence) >= 2
-    e_ids = [e.evidence_id for e in evidence]
-    assert "E001" in e_ids
-    assert "E002" in e_ids
-
-    # 4. Check Model Swaps Recorded in Telemetry
-    logs = store.get_recent_model_activity(limit=20)
-    assert len(logs) > 0
+    # Test mode has no local model. The workflow must not manufacture an approval
+    # note from the old fixed CDU/VGO demo findings.
+    assert output["status"] == "workflow_blocked"
+    assert output["verification_status"] is False
+    assert output["generated_deliverable"] is None

@@ -8,6 +8,7 @@ from pathlib import Path
 import time
 import json
 import re
+import tempfile
 from config.settings import settings
 from src.core.state_store import StateStore
 from src.models.model_client import ModelClient
@@ -160,58 +161,66 @@ Provide a detailed, well-structured answer citing specific page numbers and head
         and registers rows in the persistent evidence table with unique evidence_ids.
         """
         doc_file = Path(document_path)
+        if not doc_file.is_file():
+            return {"status": "error", "error": f"Inspection document not found: {document_path}", "findings": []}
         doc_name = doc_file.name
-
-        # 1. Load OCR specialist model onto Single GPU
-        ocr_model = settings.models.ocr
-        self.model_client.lifecycle_manager.ensure_model_loaded(
-            target_model=ocr_model,
-            project_id=project_id,
-            task_id=task_id,
-        )
-
         start_time = time.time()
-        extracted_findings = [
-            {
-                "evidence_id": "E001",
-                "equipment": "Crude Distillation Unit (CDU-1) Transfer Line Pipe Section P-104B",
-                "page_number": 4,
-                "section": "Ultrasonic Thickness Gauging (UTG) Log — High-Temperature Loop",
-                "issue": "Severe localized wall thinning and pitting corrosion detected at bend B-3",
-                "severity": "Critical",
-                "measured_value": "3.42 mm",
-                "nominal_value": "8.00 mm",
-                "threshold_limit": "4.80 mm",
-                "status": "NON-COMPLIANT",
-                "raw_text_snippet": "UTG Point P-104B-B3: Residual thickness measured at 3.42 mm (Nominal: 8.00 mm, Design Min: 4.80 mm). Significant internal naphthenic acid pitting observed.",
-            },
-            {
-                "evidence_id": "E002",
-                "equipment": "Vacuum Gas Oil (VGO) Hydrocracker High-Pressure Flange FL-208",
-                "page_number": 7,
-                "section": "Hydrostatic Pressure Test & Joint Integrity Log",
-                "issue": "Micro-fissuring and gasket degradation observed during hydro-test at 142 bar",
-                "severity": "High",
-                "measured_value": "142 bar (micro-fissures detected)",
-                "nominal_value": "150 bar design rating",
-                "threshold_limit": "Zero allowable surface fissures",
-                "status": "REQUIRES_MAINTENANCE",
-                "raw_text_snippet": "Flange FL-208 (Class 1500 RTJ): Micro-fissuring noted on ring joint surface under 142 bar hydrostatic pressure. Gasket seating surface shows 0.35 mm groove depth.",
-            },
-            {
-                "evidence_id": "E003",
-                "equipment": "Diesel Hydrotreating Unit (DHT) Heat Exchanger E-102 Shell",
-                "page_number": 12,
-                "section": "Eddy Current & Visual Internal Inspection",
-                "issue": "Moderate scale accumulation and tube inlet erosion (0.6 mm wall reduction)",
-                "severity": "Medium",
-                "measured_value": "3.90 mm residual",
-                "nominal_value": "4.50 mm",
-                "threshold_limit": "3.20 mm",
-                "status": "COMPLIANT_WITH_MONITORING",
-                "raw_text_snippet": "DHT Exchanger E-102: Eddy current scan confirms 12% tube wall thinning across top bundle. Residual thickness 3.90 mm exceeds minimum threshold 3.20 mm.",
-            },
-        ]
+        pages = self.parse_document_pages(document_path)
+        text_context = "\n\n".join(
+            f"[Page {p['page_number']}] {p['text'][:5000]}" for p in pages if p.get("text", "").strip()
+        )[:18000]
+        prompt = """Extract only findings explicitly supported by this inspection document. Return JSON only:
+{"findings":[{"page_number":1,"section":"...","equipment":"...","issue":"...","severity":"Critical|High|Medium|Low","measured_value":"...","nominal_value":"...","threshold_limit":"...","status":"...","raw_text_snippet":"verbatim supporting excerpt"}]}
+Do not infer measurements, equipment, standards, or recommendations that are absent from the source."""
+
+        raw_response = ""
+        ext = doc_file.suffix.lower()
+        image_extensions = {".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".webp"}
+        with tempfile.TemporaryDirectory(prefix="workbench_ocr_") as temp_dir:
+            image_paths: List[str] = []
+            if ext in image_extensions:
+                image_paths = [str(doc_file)]
+            elif ext == ".pdf" and not text_context:
+                try:
+                    import fitz  # PyMuPDF, pinned as an offline dependency
+                    pdf = fitz.open(str(doc_file))
+                    for index, page in enumerate(pdf):
+                        if index >= 20:
+                            break
+                        out_path = Path(temp_dir) / f"page_{index + 1}.png"
+                        page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False).save(str(out_path))
+                        image_paths.append(str(out_path))
+                except Exception as exc:
+                    return {"status": "error", "error": f"Scanned PDF requires local PyMuPDF rendering: {exc}", "findings": []}
+
+            if image_paths:
+                vision = self.model_client.generate_with_images(
+                    settings.models.vision, prompt, image_paths, project_id, task_id
+                )
+                if vision.get("status") != "ok":
+                    return {"status": vision.get("status"), "error": vision.get("error"), "findings": []}
+                raw_response = vision.get("response", "")
+            elif text_context:
+                result = self.model_client.generate_text(
+                    settings.models.reasoning, f"{prompt}\n\nSOURCE TEXT:\n{text_context}",
+                    max_tokens=1800, project_id=project_id, task_id=task_id,
+                )
+                raw_response = result.get("response", "")
+            else:
+                return {"status": "error", "error": "No extractable text or renderable pages found.", "findings": []}
+
+        parsed = self.model_client.extract_json_from_response(raw_response)
+        if not parsed or not isinstance(parsed.get("findings"), list):
+            return {"status": "error", "error": "Local model did not return valid grounded extraction JSON.", "findings": []}
+
+        extracted_findings = []
+        for index, finding in enumerate(parsed["findings"], start=1):
+            if not isinstance(finding, dict) or not finding.get("raw_text_snippet"):
+                continue
+            finding = dict(finding)
+            finding["evidence_id"] = f"E_OCR_{task_id}_{index:03d}"
+            finding["page_number"] = int(finding.get("page_number", 1))
+            extracted_findings.append(finding)
 
         # Register each finding into the persistent evidence table
         registered_evidence_ids = []
@@ -220,27 +229,28 @@ Provide a detailed, well-structured answer citing specific page numbers and head
             self.state_store.add_evidence(
                 evidence_id=e_id,
                 project_id=project_id,
-                source_type="multimodal_ocr",
+                source_type="local_multimodal_extraction",
                 source_document=doc_name,
                 page_number=f["page_number"],
-                section=f["section"],
+                section=f.get("section", "Unsectioned finding"),
                 extracted_text=f["raw_text_snippet"],
                 structured_data={
-                    "equipment": f["equipment"],
-                    "issue": f["issue"],
-                    "severity": f["severity"],
-                    "measured_value": f["measured_value"],
-                    "nominal_value": f["nominal_value"],
-                    "threshold_limit": f["threshold_limit"],
-                    "status": f["status"],
+                    "equipment": f.get("equipment", "Unidentified equipment"),
+                    "issue": f.get("issue", "Unspecified finding"),
+                    "severity": f.get("severity", "UNASSESSED"),
+                    "measured_value": f.get("measured_value", ""),
+                    "nominal_value": f.get("nominal_value", ""),
+                    "threshold_limit": f.get("threshold_limit", ""),
+                    "status": f.get("status", "UNASSESSED"),
                 },
-                confidence=0.98,
+                confidence=0.75,
             )
             registered_evidence_ids.append(e_id)
 
+        used_model = settings.models.vision if image_paths else settings.models.reasoning
         duration_ms = (time.time() - start_time) * 1000
         self.state_store.log_model_activity(
-            model_name=ocr_model,
+            model_name=used_model,
             action="INFERENCE",
             project_id=project_id,
             task_id=task_id,
@@ -253,5 +263,5 @@ Provide a detailed, well-structured answer citing specific page numbers and head
             "total_findings_extracted": len(extracted_findings),
             "evidence_ids": registered_evidence_ids,
             "findings": extracted_findings,
-            "status": "extraction_complete",
+            "status": "extraction_complete" if extracted_findings else "no_grounded_findings",
         }

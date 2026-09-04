@@ -12,7 +12,8 @@ workbench_state.db-journal
 
 # Uploads & Runtime Artifacts
 .files/
-outputs/*.docx
+outputs/*
+!outputs/.gitkeep
 
 # Environment
 .env

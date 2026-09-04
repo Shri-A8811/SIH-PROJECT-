@@ -1,8 +1,8 @@
 """
-Tests for Persistent State Store & Restart Safety.
+Tests for Persistent State Store & Restart Safety with PostgreSQL + pgvector support.
 """
 import pytest
-from src.core.state_store import StateStore, TaskStatus
+from src.core.state_store import StateStore, TaskStatus, KnowledgeChunkRecord
 
 
 def test_state_store_project_and_task_crud():
@@ -62,7 +62,8 @@ def test_evidence_and_artifact_records():
     store = StateStore("sqlite:///:memory:")
     store.create_project("PROJ_EV", "Evidence Test", "Testing evidence registration")
 
-    # Add Evidence
+    # Add Evidence with embedding vector
+    vec = [0.05] * 384
     ev = store.add_evidence(
         evidence_id="E001",
         project_id="PROJ_EV",
@@ -73,12 +74,14 @@ def test_evidence_and_artifact_records():
         extracted_text="Measured thickness: 3.42 mm",
         structured_data={"measured_mm": 3.42},
         confidence=0.98,
+        embedding=vec,
     )
     assert ev.evidence_id == "E001"
     
     fetched = store.get_evidence("E001")
     assert fetched is not None
     assert fetched.page_number == 4
+    assert fetched.embedding is not None
 
     # Record Artifact
     art = store.record_artifact(
@@ -89,3 +92,38 @@ def test_evidence_and_artifact_records():
         file_size_bytes=15420,
     )
     assert art.artifact_id == "ART_001"
+
+
+def test_pgvector_knowledge_chunk_storage_and_vector_search():
+    store = StateStore("sqlite:///:memory:")
+    
+    # Upsert knowledge chunks with vectors
+    v1 = [0.1] * 384
+    v2 = [0.8] * 384
+    
+    c1 = store.upsert_knowledge_chunk(
+        chunk_id="chunk_sop17_sec4",
+        document_name="MRPL_SOP_17.md",
+        section_title="Retirement Limits",
+        page_number=2,
+        content="Piping wall thinning retirement limit is 4.80 mm.",
+        embedding=v1,
+    )
+    assert c1.chunk_id == "chunk_sop17_sec4"
+
+    c2 = store.upsert_knowledge_chunk(
+        chunk_id="chunk_sop04_flange",
+        document_name="MRPL_SOP_04.md",
+        section_title="Flange Tolerances",
+        page_number=1,
+        content="Flange micro-fissures require immediate seal replacement.",
+        embedding=v2,
+    )
+    assert c2.chunk_id == "chunk_sop04_flange"
+
+    # Search vector chunks
+    results = store.search_vector_chunks(query_vector=v1, top_k=2)
+    assert len(results) == 2
+    top_record, top_similarity = results[0]
+    assert top_record.chunk_id == "chunk_sop17_sec4"
+    assert top_similarity > 0.99

@@ -1,6 +1,7 @@
 """
 Sparse BM25 Search Engine for Sovereign On-Premise Agentic AI Workbench.
-Performs exact keyword and term frequency matching over ingested document chunks.
+Performs exact keyword and term frequency matching over ingested document chunks,
+incorporating headings, hierarchical breadcrumbs, and document names into the corpus.
 """
 from typing import List, Tuple
 import re
@@ -9,7 +10,7 @@ from src.knowledge.chunker import DocumentChunk
 
 
 class BM25SearchEngine:
-    """Sparse keyword retrieval using BM25Okapi."""
+    """Sparse keyword retrieval using BM25Okapi with structure awareness."""
 
     def __init__(self):
         self.chunks: List[DocumentChunk] = []
@@ -26,7 +27,14 @@ class BM25SearchEngine:
             self.tokenized_corpus = []
             return
 
-        self.tokenized_corpus = [self.tokenize(c.content + " " + c.section_title) for c in chunks]
+        corpus = []
+        for c in chunks:
+            breadcrumbs = c.metadata.get("breadcrumbs", [])
+            b_text = " ".join(breadcrumbs) if isinstance(breadcrumbs, list) else ""
+            composite_text = f"{c.document_name} {c.section_title} {b_text} {c.content}"
+            corpus.append(self.tokenize(composite_text))
+
+        self.tokenized_corpus = corpus
         self.bm25 = BM25Okapi(self.tokenized_corpus)
 
     def search(self, query: str, top_k: int = 5) -> List[Tuple[DocumentChunk, float]]:
