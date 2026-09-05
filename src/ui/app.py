@@ -1,5 +1,5 @@
 """
-Sovereign On-Premise Agentic AI Workbench (MRPL | SIH26117).
+Sovereign On-Premise Agentic AI Workbench.
 Clean, premium, desktop AI application interface.
 
 Design System:
@@ -626,37 +626,37 @@ def render_welcome_state(session):
 
     with w1:
         st.markdown("<div class='starter-card-btn'>", unsafe_allow_html=True)
-        if st.button("Summarize an inspection report\n\nAnalyze CDU-1 turnaround scan & extract wall thinning findings", key="st_hero", width="stretch"):
-            prompt = "Execute full turnaround inspection report analysis on CDU-1 transfer line, retrieve SOP-17, compute wall thinning breach margin, and generate verified approval note."
+        if st.button("Summarize technical report\n\nAnalyze equipment inspection logs and extract key findings", key="st_hero", width="stretch"):
+            prompt = "Analyze the latest technical inspection report, extract key operational findings, and summarize critical observations."
             store.save_chat_message(session.id, "user", prompt, metadata={"is_hero": True})
-            store.update_chat_session(session.id, title="CDU-1 inspection summary")
+            store.update_chat_session(session.id, title="Technical report summary")
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
     with w2:
         st.markdown("<div class='starter-card-btn'>", unsafe_allow_html=True)
-        if st.button("Draft an approval note\n\nDraft a verified engineering note with repair recommendations", key="st_appr", width="stretch"):
-            prompt = "Draft an official technical approval note for Unit 42 piping repairs and include recommended next inspection date under API 570."
+        if st.button("Draft an engineering note\n\nDraft a formal technical memo with maintenance recommendations", key="st_appr", width="stretch"):
+            prompt = "Draft an official engineering approval note outlining maintenance recommendations, priority actions, and follow-up schedules."
             store.save_chat_message(session.id, "user", prompt)
-            store.update_chat_session(session.id, title="Approval note draft")
+            store.update_chat_session(session.id, title="Engineering note draft")
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
     with w3:
         st.markdown("<div class='starter-card-btn'>", unsafe_allow_html=True)
-        if st.button("Calculate corrosion rate (API 570)\n\nCompute remaining useful life from 8.0 to 6.2 mm in 5 years", key="st_calc", width="stretch"):
-            prompt = "Calculate short-term corrosion rate, remaining useful life (RUL), and API 570 inspection interval for baseline 8.0 mm, current 6.2 mm over 5 years against 4.8 mm retirement."
+        if st.button("Equipment life assessment\n\nEvaluate degradation rates and estimate remaining service life", key="st_calc", width="stretch"):
+            prompt = "Evaluate equipment degradation metrics against historical baselines and calculate estimated remaining service life."
             store.save_chat_message(session.id, "user", prompt)
-            store.update_chat_session(session.id, title="API 570 RUL calculation")
+            store.update_chat_session(session.id, title="Equipment life assessment")
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
     with w4:
         st.markdown("<div class='starter-card-btn'>", unsafe_allow_html=True)
-        if st.button("Search internal SOPs\n\nQuery minimum retirement pipe wall thickness limits", key="st_sop", width="stretch"):
-            prompt = "What is the mandatory minimum retirement thickness for crude distillation transfer piping under SOP-17?"
+        if st.button("Search standard procedures\n\nQuery internal specifications and operating limits", key="st_sop", width="stretch"):
+            prompt = "Search our internal documentation for standard operating procedures, safety guidelines, and threshold limits."
             store.save_chat_message(session.id, "user", prompt)
-            store.update_chat_session(session.id, title="SOP-17 query")
+            store.update_chat_session(session.id, title="SOP inquiry")
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
@@ -676,7 +676,6 @@ def render_settings_drawer(session, scope, egress_snapshot):
     sections = [
         "Workspace & Knowledge",
         "Models & Runtime",
-        "Tools & Calculators",
         "Security & Audit",
         "Preferences",
     ]
@@ -782,62 +781,7 @@ def render_settings_drawer(session, scope, egress_snapshot):
         else:
             st.caption("No model transitions recorded in current session.")
 
-    # 3. Tools & Calculators
-    elif selected_sec == "Tools & Calculators":
-        st.markdown("##### Tools & Calculators")
-        st.caption("Deterministic engineering verification without LLM arithmetic.")
-
-        with st.expander("ASME B31.3 Minimum Thickness", expanded=True):
-            st.caption("Process Piping Sec 304.1.2 calculation.")
-            p_bar = st.number_input("Design Pressure (bar):", value=35.0, step=1.0, key="set_p_bar")
-            d_mm = st.number_input("Outside Diameter (mm):", value=219.1, step=1.0, key="set_d_mm")
-            s_mpa = st.number_input("Allowable Stress (MPa):", value=115.0, step=5.0, key="set_s_mpa")
-            c_mm = st.number_input("Corrosion Allowance (mm):", value=1.5, step=0.5, key="set_c_mm")
-            m_mm = st.number_input("Measured Residual (mm):", value=3.42, step=0.1, key="set_m_mm")
-
-            if st.button("Compute ASME B31.3", type="primary", width="stretch", key="btn_asme_set"):
-                res = orchestrator.calculator.calculate_asme_b31_3_min_thickness(
-                    design_pressure_bar=p_bar,
-                    outside_diameter_mm=d_mm,
-                    allowable_stress_mpa=s_mpa,
-                    corrosion_allowance_mm=c_mm,
-                    measured_thickness_mm=m_mm,
-                )
-                stat_col = "var(--danger)" if not res["is_compliant"] else "var(--success)"
-                st.markdown(f"""
-                <div style="background: var(--bg-surface-raised); border: 1px solid {stat_col}; border-radius: 6px; padding: 10px; margin-top: 8px; font-size: 12px;">
-                    <div style="font-weight: 600; color: {stat_col};">STATUS: {res['status']}</div>
-                    <div>Required Min: <code>{res['min_required_thickness_mm']} mm</code> (Margin: {res['margin_mm']:+.2f} mm)</div>
-                </div>
-                """, unsafe_allow_html=True)
-
-        with st.expander("API 570 Corrosion Rate & RUL", expanded=False):
-            st.caption("Piping Inspection Code Sec 7.1 calculation.")
-            prev_t = st.number_input("Previous Baseline (mm):", value=8.00, step=0.5, key="set_prev_t")
-            curr_t = st.number_input("Current Thickness (mm):", value=6.20, step=0.1, key="set_curr_t")
-            time_y = st.number_input("Elapsed Time (years):", value=5.0, step=0.5, key="set_time_y")
-            req_t = st.number_input("Retirement Thickness (mm):", value=4.80, step=0.1, key="set_req_t")
-
-            if st.button("Compute API 570 RUL", type="primary", width="stretch", key="btn_api_set"):
-                res_api = orchestrator.calculator.calculate_corrosion_rate_and_rul(
-                    previous_thickness_mm=prev_t,
-                    current_thickness_mm=curr_t,
-                    time_interval_years=time_y,
-                    required_thickness_mm=req_t,
-                )
-                st.markdown(f"""
-                <div style="background: var(--bg-surface-raised); border: 1px solid var(--primary); border-radius: 6px; padding: 10px; margin-top: 8px; font-size: 12px;">
-                    <div>Corrosion Rate: <code>{res_api['corrosion_rate_mm_per_year']} mm/yr</code></div>
-                    <div>Remaining Life: <code>{res_api['remaining_useful_life_years']} years</code></div>
-                    <div>Inspection Interval: <code>{res_api['api_570_next_inspection_interval_years']} years</code></div>
-                </div>
-                """, unsafe_allow_html=True)
-
-        st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
-        st.markdown("**Isolated Code Sandbox:**")
-        st.caption("Mandatory Docker containment: `--network none`, `--pull never`, read-only FS, non-root execution.")
-
-    # 4. Security & Audit
+    # 3. Security & Audit
     elif selected_sec == "Security & Audit":
         st.markdown("##### Security & Audit")
         st.caption("Continuous host socket telemetry proving sovereign on-premise containment.")
@@ -869,7 +813,7 @@ def render_settings_drawer(session, scope, egress_snapshot):
         else:
             st.caption("No evidence entries recorded in active session.")
 
-    # 5. Preferences
+    # 4. Preferences
     elif selected_sec == "Preferences":
         st.markdown("##### Preferences")
         st.caption("Configure display mode and local storage behaviors.")
