@@ -443,7 +443,7 @@ def render_sidebar(sessions, active_id):
     with st.sidebar:
         # Top + New Chat
         st.markdown("<div class='sidebar-new-chat-wrap'>", unsafe_allow_html=True)
-        if st.button("＋  New chat", key="btn_new_chat", use_container_width=True):
+        if st.button("＋  New chat", key="btn_new_chat", width="stretch"):
             new_s = store.create_chat_session(title="New chat", knowledge_scope=active_scope)
             st.session_state.active_session_id = new_s.id
             st.rerun()
@@ -461,7 +461,7 @@ def render_sidebar(sessions, active_id):
 
             wrap_cls = "sidebar-chat-active" if is_active else "sidebar-chat-row"
             st.markdown(f"<div class='{wrap_cls}'>", unsafe_allow_html=True)
-            if st.button(title, key=f"sess_btn_{s.id}", use_container_width=True):
+            if st.button(title, key=f"sess_btn_{s.id}", width="stretch"):
                 st.session_state.active_session_id = s.id
                 st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
@@ -473,7 +473,7 @@ def render_sidebar(sessions, active_id):
         
         st.markdown("<div class='sidebar-bottom-item'>", unsafe_allow_html=True)
         settings_label = "✕ Close Settings" if st.session_state.show_settings else "⚙ Settings"
-        if st.button(settings_label, key="btn_sidebar_settings", use_container_width=True):
+        if st.button(settings_label, key="btn_sidebar_settings", width="stretch"):
             st.session_state.show_settings = not st.session_state.show_settings
             st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
@@ -481,7 +481,7 @@ def render_sidebar(sessions, active_id):
         # Subtle delete for active chat
         if len(sessions) > 1:
             st.markdown("<div class='sidebar-bottom-item'>", unsafe_allow_html=True)
-            if st.button("🗑 Delete this chat", key="btn_del_active", use_container_width=True):
+            if st.button("🗑 Delete this chat", key="btn_del_active", width="stretch"):
                 store.delete_chat_session(active_id)
                 rem = store.get_chat_sessions()
                 st.session_state.active_session_id = rem[0].id if rem else None
@@ -539,7 +539,7 @@ def render_header(session, scope):
             """, unsafe_allow_html=True)
         with c_cog:
             gear_text = "✕" if st.session_state.show_settings else "⚙"
-            if st.button(gear_text, key="topbar_gear_btn", use_container_width=True):
+            if st.button(gear_text, key="topbar_gear_btn", width="stretch"):
                 st.session_state.show_settings = not st.session_state.show_settings
                 st.rerun()
 
@@ -626,7 +626,7 @@ def render_welcome_state(session):
 
     with w1:
         st.markdown("<div class='starter-card-btn'>", unsafe_allow_html=True)
-        if st.button("Summarize an inspection report\n\nAnalyze CDU-1 turnaround scan & extract wall thinning findings", key="st_hero", use_container_width=True):
+        if st.button("Summarize an inspection report\n\nAnalyze CDU-1 turnaround scan & extract wall thinning findings", key="st_hero", width="stretch"):
             prompt = "Execute full turnaround inspection report analysis on CDU-1 transfer line, retrieve SOP-17, compute wall thinning breach margin, and generate verified approval note."
             store.save_chat_message(session.id, "user", prompt, metadata={"is_hero": True})
             store.update_chat_session(session.id, title="CDU-1 inspection summary")
@@ -635,7 +635,7 @@ def render_welcome_state(session):
 
     with w2:
         st.markdown("<div class='starter-card-btn'>", unsafe_allow_html=True)
-        if st.button("Draft an approval note\n\nDraft a verified engineering note with repair recommendations", key="st_appr", use_container_width=True):
+        if st.button("Draft an approval note\n\nDraft a verified engineering note with repair recommendations", key="st_appr", width="stretch"):
             prompt = "Draft an official technical approval note for Unit 42 piping repairs and include recommended next inspection date under API 570."
             store.save_chat_message(session.id, "user", prompt)
             store.update_chat_session(session.id, title="Approval note draft")
@@ -644,7 +644,7 @@ def render_welcome_state(session):
 
     with w3:
         st.markdown("<div class='starter-card-btn'>", unsafe_allow_html=True)
-        if st.button("Calculate corrosion rate (API 570)\n\nCompute remaining useful life from 8.0 to 6.2 mm in 5 years", key="st_calc", use_container_width=True):
+        if st.button("Calculate corrosion rate (API 570)\n\nCompute remaining useful life from 8.0 to 6.2 mm in 5 years", key="st_calc", width="stretch"):
             prompt = "Calculate short-term corrosion rate, remaining useful life (RUL), and API 570 inspection interval for baseline 8.0 mm, current 6.2 mm over 5 years against 4.8 mm retirement."
             store.save_chat_message(session.id, "user", prompt)
             store.update_chat_session(session.id, title="API 570 RUL calculation")
@@ -653,7 +653,7 @@ def render_welcome_state(session):
 
     with w4:
         st.markdown("<div class='starter-card-btn'>", unsafe_allow_html=True)
-        if st.button("Search internal SOPs\n\nQuery minimum retirement pipe wall thickness limits", key="st_sop", use_container_width=True):
+        if st.button("Search internal SOPs\n\nQuery minimum retirement pipe wall thickness limits", key="st_sop", width="stretch"):
             prompt = "What is the mandatory minimum retirement thickness for crude distillation transfer piping under SOP-17?"
             store.save_chat_message(session.id, "user", prompt)
             store.update_chat_session(session.id, title="SOP-17 query")
@@ -668,7 +668,7 @@ def render_settings_drawer(session, scope, egress_snapshot):
     with c_set_title:
         st.markdown("<div style='font-size: 15px; font-weight: 600; color: var(--text-primary); padding-top: 4px;'>Settings</div>", unsafe_allow_html=True)
     with c_set_close:
-        if st.button("✕ Close", key="btn_close_settings_box", use_container_width=True):
+        if st.button("✕ Close", key="btn_close_settings_box", width="stretch"):
             st.session_state.show_settings = False
             st.rerun()
 
@@ -708,7 +708,7 @@ def render_settings_drawer(session, scope, egress_snapshot):
             custom_folder = st.text_input("New folder name:", key="set_custom_folder_input")
         target_f = custom_folder.strip() if (dest_cat == "＋ New folder..." and custom_folder.strip()) else dest_cat
 
-        if st.button("Index Document into Knowledge Base", type="primary", use_container_width=True, key="btn_ingest_set"):
+        if st.button("Index Document into Knowledge Base", type="primary", width="stretch", key="btn_ingest_set"):
             if up_file is None:
                 st.warning("Please choose a file first.")
             else:
@@ -729,7 +729,7 @@ def render_settings_drawer(session, scope, egress_snapshot):
         for d in docs:
             with st.expander(f"{d.filename} · {d.category}", expanded=False):
                 st.caption(f"Size: {d.file_size_bytes / 1024:.1f} KB · Chunks: {d.chunk_count}")
-                if st.button("Delete document", key=f"del_d_{d.filename}", use_container_width=True):
+                if st.button("Delete document", key=f"del_d_{d.filename}", width="stretch"):
                     orchestrator.retriever.delete_document(d.filename)
                     st.success(f"Deleted {d.filename}")
                     st.rerun()
@@ -741,7 +741,7 @@ def render_settings_drawer(session, scope, egress_snapshot):
                             st.code(ch.content[:200] + ("..." if len(ch.content) > 200 else ""), language="markdown")
 
         st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
-        if st.button("Re-index all documents", use_container_width=True, key="btn_reindex_all"):
+        if st.button("Re-index all documents", width="stretch", key="btn_reindex_all"):
             with st.spinner("Re-indexing all folders..."):
                 orchestrator.retriever.ingest_directory()
                 st.success("Re-indexed knowledge base.")
@@ -778,7 +778,7 @@ def render_settings_drawer(session, scope, egress_snapshot):
         recent = store.get_recent_model_activity(limit=8)
         if recent:
             rows = [{"Model": r.model_name, "Action": r.action, "Duration": f"{r.duration_ms:.0f} ms"} for r in recent]
-            st.dataframe(rows, use_container_width=True)
+            st.dataframe(rows, width="stretch")
         else:
             st.caption("No model transitions recorded in current session.")
 
@@ -795,7 +795,7 @@ def render_settings_drawer(session, scope, egress_snapshot):
             c_mm = st.number_input("Corrosion Allowance (mm):", value=1.5, step=0.5, key="set_c_mm")
             m_mm = st.number_input("Measured Residual (mm):", value=3.42, step=0.1, key="set_m_mm")
 
-            if st.button("Compute ASME B31.3", type="primary", use_container_width=True, key="btn_asme_set"):
+            if st.button("Compute ASME B31.3", type="primary", width="stretch", key="btn_asme_set"):
                 res = orchestrator.calculator.calculate_asme_b31_3_min_thickness(
                     design_pressure_bar=p_bar,
                     outside_diameter_mm=d_mm,
@@ -818,7 +818,7 @@ def render_settings_drawer(session, scope, egress_snapshot):
             time_y = st.number_input("Elapsed Time (years):", value=5.0, step=0.5, key="set_time_y")
             req_t = st.number_input("Retirement Thickness (mm):", value=4.80, step=0.1, key="set_req_t")
 
-            if st.button("Compute API 570 RUL", type="primary", use_container_width=True, key="btn_api_set"):
+            if st.button("Compute API 570 RUL", type="primary", width="stretch", key="btn_api_set"):
                 res_api = orchestrator.calculator.calculate_corrosion_rate_and_rul(
                     previous_thickness_mm=prev_t,
                     current_thickness_mm=curr_t,
@@ -857,7 +857,7 @@ def render_settings_drawer(session, scope, egress_snapshot):
 
         if egress_snapshot.active_sockets:
             with st.expander("Active Local Sockets", expanded=False):
-                st.dataframe(egress_snapshot.active_sockets, use_container_width=True)
+                st.dataframe(egress_snapshot.active_sockets, width="stretch")
 
         st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
         st.markdown("**Grounded Evidence Log:**")
@@ -950,7 +950,7 @@ with col_chat:
             with q_col1:
                 att_file = st.file_uploader("Attach document for analysis:", type=["pdf", "docx", "md", "txt"], key="quick_composer_uploader")
             with q_col2:
-                if st.button("✕ Close", key="close_quick_att", use_container_width=True):
+                if st.button("✕ Close", key="close_quick_att", width="stretch"):
                     st.session_state.show_quick_attach = False
                     st.rerun()
             if att_file is not None:
